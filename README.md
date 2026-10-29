@@ -1,6 +1,6 @@
 # House of Design: Discovery Questionnaire
 
-A one-question-per-screen web version of the House of Design discovery questionnaire. The landing page asks who is answering and sends each founder to their own page, `/mahek` or `/dhanashree`, so they can answer separately, from different places. Founders can type an answer, record a voice note on any question, and add photos where pictures help. Each founder sends their own submission. Admins review submissions and export each one as a ZIP to upload to Claude.
+A one-question-per-screen web version of the House of Design discovery questionnaire. The landing page asks who is answering and sends each founder to their own page, `/mahek` or `/dhanshree`, so they can answer separately, from different places. Founders can type an answer, record a voice note on any question, and add photos where pictures help. Each founder sends their own submission. Admins review submissions and export each one as a ZIP to upload to Claude.
 
 Stack: Next.js 16 (App Router, Cache Components), TypeScript, Tailwind v4 and zod, deployed on Vercel. The only storage is a **private Vercel Blob store**: no database and no paid services.
 

@@ -12,7 +12,7 @@ Next.js 16 (App Router, Cache Components) + TypeScript + Tailwind v4 on Vercel P
 
 ## Users
 
-- **Respondents:** the two founders of House of Design, an interior design studio run by two women who are best friends. They answer the studio's discovery questionnaire before a rebrand, digital relaunch and founder-led LinkedIn engagement. They are not in the same place, so each answers on their own: the landing page asks who is answering and sends them to `/mahek` or `/dhanashree`. They may answer on a phone or a laptop, possibly in more than one sitting.
+- **Respondents:** the two founders of House of Design, an interior design studio run by two women who are best friends. They answer the studio's discovery questionnaire before a rebrand, digital relaunch and founder-led LinkedIn engagement. They are not in the same place, so each answers on their own: the landing page asks who is answering and sends them to `/mahek` or `/dhanshree`. They may answer on a phone or a laptop, possibly in more than one sitting.
 - **Admin:** the agency team running the engagement. They review submissions, then export each one as a ZIP to upload to Claude for synthesis.
 
 ## Product Purpose
