@@ -4,7 +4,6 @@ export interface SectionInfo {
   number: number;
   title: string;
   questionIds: string[];
-  perPersonCount: number;
 }
 
 /** Groups consecutive questions by their `section` into numbered chapters. */
@@ -14,11 +13,10 @@ export function buildSections(questions: Question[]): SectionInfo[] {
     const title = q.section ?? "";
     let current = sections.at(-1);
     if (!current || current.title !== title) {
-      current = { number: sections.length + 1, title, questionIds: [], perPersonCount: 0 };
+      current = { number: sections.length + 1, title, questionIds: [] };
       sections.push(current);
     }
     current.questionIds.push(q.id);
-    if (q.perPerson) current.perPersonCount++;
   }
   return sections;
 }

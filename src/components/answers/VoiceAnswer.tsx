@@ -6,7 +6,7 @@ import { Check, Mic, Redo, StopSquare, Trash } from "@/components/Icons";
 import { Button } from "@/components/ui";
 import { formatDuration } from "@/lib/format";
 import type { VoiceFile } from "@/lib/manifest";
-import { MEDIA_RULES, mediaPathname, type SlotKey } from "@/lib/paths";
+import { MEDIA_RULES, mediaPathname } from "@/lib/paths";
 import {
   classifyGetUserMediaError,
   describeRecorderProblem,
@@ -38,7 +38,6 @@ interface Session {
 export function VoiceAnswer({
   submissionId,
   questionId,
-  slot,
   maxDurationSec,
   value,
   previewUrl,
@@ -50,7 +49,6 @@ export function VoiceAnswer({
 }: {
   submissionId: string;
   questionId: string;
-  slot: SlotKey;
   maxDurationSec: number;
   value?: VoiceFile;
   previewUrl?: string;
@@ -255,7 +253,7 @@ export function VoiceAnswer({
   const save = async () => {
     if (phase.name !== "review") return;
     const take = phase;
-    const pathname = mediaPathname(submissionId, questionId, slot, { kind: "voice", ext: take.ext });
+    const pathname = mediaPathname(submissionId, questionId, { kind: "voice", ext: take.ext });
     const controller = new AbortController();
     abortRef.current = controller;
     setProblem(null);

@@ -1,12 +1,5 @@
-import { answerModes, getQuestion, type Question } from "@/config/questions";
-import {
-  MEDIA_RULES,
-  mediaTypeForExt,
-  mimeForExt,
-  parseMediaPathname,
-  submissionIdDate,
-  type SlotKey,
-} from "@/lib/paths";
+import { answerModes, getQuestion } from "@/config/questions";
+import { MEDIA_RULES, mediaTypeForExt, mimeForExt, parseMediaPathname, submissionIdDate } from "@/lib/paths";
 
 /** Drafts live in localStorage, so allow a generous window to finish. */
 const MAX_SUBMISSION_AGE_MS = 30 * 24 * 60 * 60 * 1000;
@@ -26,10 +19,6 @@ export function assertFreshSubmissionId(submissionId: string, now = Date.now()):
   return startedAt;
 }
 
-export function slotsFor(question: Question): SlotKey[] {
-  return question.perPerson ? ["p1", "p2"] : ["main"];
-}
-
 /** Validates a client-upload pathname against the questionnaire. Returns what the token may accept. */
 export function resolveUploadTarget(pathname: string) {
   const parsed = parseMediaPathname(pathname);
@@ -42,7 +31,6 @@ export function resolveUploadTarget(pathname: string) {
   const modes = answerModes(question);
   const accepted = mediaType === "voice" ? modes.voice : (parsed.index ?? 0) <= modes.images;
   if (!accepted) throw new RuleError("This question doesn't accept that kind of file.");
-  if (!slotsFor(question).includes(parsed.slot)) throw new RuleError("Invalid answer slot.");
 
   return {
     ...parsed,

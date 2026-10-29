@@ -1,21 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PersonSlot, Question } from "@/config/questions";
+import { FOUNDER_IDS, FOUNDER_NAMES, type FounderId } from "@/config/founders";
+import type { Question } from "@/config/questions";
 import { ChapterCard } from "@/components/questionnaire/ChapterCard";
 import { DoneScreen } from "@/components/questionnaire/DoneScreen";
 import { IntroScreen } from "@/components/questionnaire/IntroScreen";
 import { QuestionScreen } from "@/components/questionnaire/QuestionScreen";
 import { ReviewScreen } from "@/components/questionnaire/ReviewScreen";
 import { ProgressLine, Wordmark } from "@/components/ui";
-import { clearDraft, isAnswered, loadDraft, newDraft, saveDraft, type Draft, type DraftSlot } from "@/lib/draft";
-import type { ClientSlot, SubmitBody } from "@/lib/manifest";
-import type { SlotKey } from "@/lib/paths";
+import { clearDraft, isAnswered, loadDraft, newDraft, saveDraft, type Draft, type DraftAnswer } from "@/lib/draft";
+import type { ClientAnswer, SubmitBody } from "@/lib/manifest";
 import { buildSections, pad2, type SectionInfo } from "@/lib/sections";
-
-function slotsOf(q: Question): SlotKey[] {
-  return q.perPerson ? ["p1", "p2"] : ["main"];
-}
 
 function prefersReducedMotion(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -25,13 +21,8 @@ function hasFinePointer(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(pointer: fine)").matches;
 }
 
-export function Questionnaire({
-  questions,
-  defaultPeople,
-}: {
-  questions: Question[];
-  defaultPeople: Record<PersonSlot, string>;
-}) {
+/** One founder's questionnaire: their own draft, answers and submission. */
+export function Questionnaire({ questions, founder }: { questions: Question[]; founder: FounderId }) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [doneId, setDoneId] = useState<string | null>(null);
   const [previews, setPreviews] = useState<Record<string, string>>({});
@@ -54,16 +45,17 @@ export function Questionnaire({
     for (const s of sections) for (const id of s.questionIds) map.set(id, s);
     return map;
   }, [sections]);
-  const perPersonCount = questions.filter((q) => q.perPerson).length;
+  const founderName = FOUNDER_NAMES[founder];
+  const otherFounderName = FOUNDER_NAMES[FOUNDER_IDS.find((id) => id !== founder) ?? founder];
 
   // Restore (or start) the draft on the client only.
   useEffect(() => {
-    const restored = loadDraft();
-    const d = restored ?? newDraft();
+    const restored = loadDraft(founder);
+    const d = restored ?? newDraft(founder);
     // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after mount
     setDraft({ ...d, step: 0 });
     if (restored && restored.step > 0) setResumeStep(Math.min(restored.step, total));
-  }, [total]);
+  }, [founder, total]);
 
   // Autosave, lightly debounced.
   useEffect(() => {
@@ -75,19 +67,11 @@ export function Questionnaire({
   // Free audio/image object URLs when leaving the page.
   useEffect(() => () => Object.values(previewsRef.current).forEach((u) => URL.revokeObjectURL(u)), []);
 
-  const people = useMemo(() => {
-    const named = draft?.respondent.people;
-    return {
-      p1: named?.p1.trim() || defaultPeople.p1,
-      p2: named?.p2.trim() || defaultPeople.p2,
-    };
-  }, [draft?.respondent.people, defaultPeople]);
-
   const missing = useMemo(() => {
     const set = new Set<string>();
     if (!draft) return set;
     for (const q of questions) {
-      if (q.required && !slotsOf(q).every((s) => isAnswered(draft.answers[q.id]?.[s]))) set.add(q.id);
+      if (q.required && !isAnswered(draft.answers[q.id])) set.add(q.id);
     }
     return set;
   }, [draft, questions]);
@@ -122,13 +106,8 @@ export function Questionnaire({
         setNavError("Finish saving your recording or photos before moving on.");
         return;
       }
-      const answers = draft.answers[question.id] ?? {};
-      if (question.required && !slotsOf(question).every((s) => isAnswered(answers[s]))) {
-        setNavError(
-          question.perPerson
-            ? "This one is starred: both founders need to answer before moving on."
-            : "This question needs an answer before moving on.",
-        );
+      if (question.required && !isAnswered(draft.answers[question.id])) {
+        setNavError("This question needs an answer before moving on.");
         return;
       }
     }
@@ -156,14 +135,9 @@ export function Questionnaire({
     return () => window.removeEventListener("keydown", onKey);
   }, [chapter, next, question]);
 
-  const updateSlot = useCallback((questionId: string, slot: SlotKey, update: (prev: DraftSlot) => DraftSlot) => {
+  const updateAnswer = useCallback((questionId: string, update: (prev: DraftAnswer) => DraftAnswer) => {
     setNavError(null);
-    setDraft((d) => {
-      if (!d) return d;
-      const slots = { ...(d.answers[questionId] ?? {}) };
-      slots[slot] = update(slots[slot] ?? {});
-      return { ...d, answers: { ...d.answers, [questionId]: slots } };
-    });
+    setDraft((d) => (d ? { ...d, answers: { ...d.answers, [questionId]: update(d.answers[questionId] ?? {}) } } : d));
   }, []);
 
   /** Session-only previews of uploaded media, keyed by blob pathname. */
@@ -188,41 +162,32 @@ export function Questionnaire({
 
     const answers: SubmitBody["answers"] = {};
     for (const q of questions) {
-      for (const slot of slotsOf(q)) {
-        const v = draft.answers[q.id]?.[slot];
-        if (!v || !isAnswered(v)) continue;
-        // Drop client-only fields (thumbnails, local sizes) — the server re-reads sizes from storage.
-        const clean: ClientSlot = {};
-        if (v.text?.trim()) clean.text = v.text;
-        if (v.voice) {
-          const { pathname, mimeType, durationSec } = v.voice;
-          clean.voice = { pathname, mimeType, durationSec };
-        }
-        if (v.images?.length) {
-          clean.images = v.images.map(({ pathname, mimeType, width, height }) => ({
-            pathname,
-            mimeType,
-            width,
-            height,
-          }));
-        }
-        (answers[q.id] ??= {})[slot] = clean;
+      const v = draft.answers[q.id];
+      if (!v || !isAnswered(v)) continue;
+      // Drop client-only fields (thumbnails, local sizes) — the server re-reads sizes from storage.
+      const clean: ClientAnswer = {};
+      if (v.text?.trim()) clean.text = v.text;
+      if (v.voice) {
+        const { pathname, mimeType, durationSec } = v.voice;
+        clean.voice = { pathname, mimeType, durationSec };
       }
+      if (v.images?.length) {
+        clean.images = v.images.map(({ pathname, mimeType, width, height }) => ({
+          pathname,
+          mimeType,
+          width,
+          height,
+        }));
+      }
+      answers[q.id] = clean;
     }
-    const named = [draft.respondent.people.p1.trim(), draft.respondent.people.p2.trim()].filter(Boolean);
     const body = {
       submissionId: draft.submissionId,
-      respondent: {
-        name: named.join(" & ") || undefined,
-        email: draft.respondent.email.trim() || undefined,
-        people: {
-          p1: draft.respondent.people.p1.trim() || undefined,
-          p2: draft.respondent.people.p2.trim() || undefined,
-        },
-      },
+      founder,
+      email: draft.email.trim() || undefined,
       website: draft.website || undefined,
       answers,
-    };
+    } satisfies SubmitBody;
 
     try {
       const res = await fetch("/api/submit", {
@@ -236,7 +201,7 @@ export function Questionnaire({
         setSubmitting(false);
         return;
       }
-      clearDraft();
+      clearDraft(founder);
       setDoneId(draft.submissionId);
       window.scrollTo({ top: 0 });
     } catch {
@@ -245,7 +210,7 @@ export function Questionnaire({
     }
   };
 
-  if (doneId) return <DoneScreen submissionId={doneId} />;
+  if (doneId) return <DoneScreen submissionId={doneId} founderName={founderName} />;
 
   if (!draft) return <div className="min-h-dvh" aria-busy="true" />;
 
@@ -264,7 +229,7 @@ export function Questionnaire({
                 goTo(0);
               }}
               className="rounded-[2px]"
-              aria-label="House of Design — back to the start"
+              aria-label={`House of Design — back to the start of ${founderName}'s questionnaire`}
             >
               <Wordmark />
             </button>
@@ -292,19 +257,19 @@ export function Questionnaire({
       {step === 0 ? (
         <IntroScreen
           draft={draft}
+          founderName={founderName}
+          otherFounderName={otherFounderName}
           total={total}
           sectionCount={sections.length}
-          perPersonCount={perPersonCount}
-          defaultPeople={defaultPeople}
           resumeStep={resumeStep}
-          onChange={(respondent, website) => setDraft((d) => (d ? { ...d, respondent, website } : d))}
+          onChange={(email, website) => setDraft((d) => (d ? { ...d, email, website } : d))}
           onBegin={() => goTo(resumeStep ?? 1)}
           onStartOver={() => {
-            clearDraft();
+            clearDraft(founder);
             Object.values(previews).forEach((u) => URL.revokeObjectURL(u));
             setPreviews({});
             setResumeStep(null);
-            setDraft({ ...newDraft(), respondent: draft.respondent });
+            setDraft({ ...newDraft(founder), email: draft.email });
           }}
         />
       ) : question ? (
@@ -314,20 +279,19 @@ export function Questionnaire({
             question={question}
             number={step}
             submissionId={draft.submissionId}
-            people={people}
-            answers={draft.answers[question.id] ?? {}}
+            answer={draft.answers[question.id] ?? {}}
             previews={previews}
             autoFocus={hasFinePointer()}
             nextLabel={
               step === total
                 ? "Review answers"
-                : !question.required && !slotsOf(question).some((s) => isAnswered(draft.answers[question.id]?.[s]))
+                : !question.required && !isAnswered(draft.answers[question.id])
                   ? "Skip"
                   : "Next"
             }
             error={navError}
             canGoBack={step > 1}
-            onSlotChange={(slot, update) => updateSlot(question.id, slot, update)}
+            onChange={(update) => updateAnswer(question.id, update)}
             onPreview={setPreview}
             onBusy={setPartBusy}
             onNext={next}
@@ -340,7 +304,7 @@ export function Questionnaire({
           sections={sections}
           answers={draft.answers}
           previews={previews}
-          people={people}
+          founderName={founderName}
           missing={missing}
           submitting={submitting}
           error={submitError}

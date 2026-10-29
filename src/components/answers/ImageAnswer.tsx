@@ -5,7 +5,7 @@ import { Camera, Close, ImageIcon, Plus } from "@/components/Icons";
 import { buttonClass } from "@/components/ui";
 import type { DraftImage } from "@/lib/draft";
 import { compressImage, ImageDecodeError } from "@/lib/image";
-import { mediaPathname, parseMediaFileName, type SlotKey } from "@/lib/paths";
+import { mediaPathname, parseMediaFileName } from "@/lib/paths";
 import { uploadMedia } from "@/lib/upload";
 
 interface Pending {
@@ -22,13 +22,12 @@ function photoIndex(pathname: string): number {
 }
 
 /**
- * Up to `max` photos for one answer slot. Each photo is resized, stripped of
+ * Up to `max` photos for one answer. Each photo is resized, stripped of
  * EXIF/GPS, and uploaded the moment it's chosen, to its own numbered file.
  */
 export function ImageAnswer({
   submissionId,
   questionId,
-  slot,
   max,
   images,
   previews,
@@ -40,7 +39,6 @@ export function ImageAnswer({
 }: {
   submissionId: string;
   questionId: string;
-  slot: SlotKey;
   max: number;
   images: DraftImage[];
   /** Local object URLs keyed by blob pathname (this session only). */
@@ -90,7 +88,7 @@ export function ImageAnswer({
       const compressed = await compressImage(file);
       url = URL.createObjectURL(compressed.blob);
       update(key, { url });
-      const pathname = mediaPathname(submissionId, questionId, slot, { kind: "image", index });
+      const pathname = mediaPathname(submissionId, questionId, { kind: "image", index });
       await uploadMedia(
         pathname,
         compressed.blob,

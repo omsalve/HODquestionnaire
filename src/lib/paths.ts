@@ -1,16 +1,13 @@
-import type { PersonSlot, QuestionType } from "@/config/questions";
+import type { QuestionType } from "@/config/questions";
 
 /**
- * Storage layout, shared by the browser and the server:
+ * Storage layout, shared by the browser and the server. One submission is one
+ * founder's answers (the founder is recorded in the manifest):
  *
  *   submissions/{submissionId}/manifest.json
- *   submissions/{submissionId}/{questionId}[.{p1|p2}].{webm|m4a}   the slot's voice recording
- *   submissions/{submissionId}/{questionId}[.{p1|p2}].img{n}.jpg   the slot's n-th photo
- *
- * The .p1/.p2 segment appears only on per-founder (★) questions.
+ *   submissions/{submissionId}/{questionId}.{webm|m4a}   the answer's voice recording
+ *   submissions/{submissionId}/{questionId}.img{n}.jpg   the answer's n-th photo
  */
-
-export type SlotKey = "main" | PersonSlot;
 
 /** e.g. 2026-10-25T14-03-11_x7k2p9 — sorts chronologically as a string. */
 export const SUBMISSION_ID_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})_([a-z0-9]{6})$/;
@@ -75,23 +72,21 @@ export function manifestPathname(submissionId: string): string {
   return `${submissionPrefix(submissionId)}manifest.json`;
 }
 
-/** What a media file holds: the slot's voice recording, or its n-th photo (1-based). */
+/** What a media file holds: the answer's voice recording, or its n-th photo (1-based). */
 export type MediaPart = { kind: "voice"; ext: "webm" | "m4a" } | { kind: "image"; index: number };
 
-export function mediaFileName(questionId: string, slot: SlotKey, part: MediaPart): string {
-  const base = slot === "main" ? questionId : `${questionId}.${slot}`;
-  return part.kind === "voice" ? `${base}.${part.ext}` : `${base}.img${part.index}.jpg`;
+export function mediaFileName(questionId: string, part: MediaPart): string {
+  return part.kind === "voice" ? `${questionId}.${part.ext}` : `${questionId}.img${part.index}.jpg`;
 }
 
-export function mediaPathname(submissionId: string, questionId: string, slot: SlotKey, part: MediaPart): string {
-  return `${submissionPrefix(submissionId)}${mediaFileName(questionId, slot, part)}`;
+export function mediaPathname(submissionId: string, questionId: string, part: MediaPart): string {
+  return `${submissionPrefix(submissionId)}${mediaFileName(questionId, part)}`;
 }
 
-const MEDIA_FILE_RE = /^([a-z0-9]+(?:-[a-z0-9]+)*)(?:\.(p1|p2))?(?:\.img([1-9]|10))?\.(webm|m4a|jpg)$/;
+const MEDIA_FILE_RE = /^([a-z0-9]+(?:-[a-z0-9]+)*)(?:\.img([1-9]|10))?\.(webm|m4a|jpg)$/;
 
 export interface ParsedMediaFile {
   questionId: string;
-  slot: SlotKey;
   ext: MediaExt;
   /** Photo number for images; undefined for voice. */
   index?: number;
@@ -100,11 +95,11 @@ export interface ParsedMediaFile {
 export function parseMediaFileName(fileName: string): ParsedMediaFile | null {
   const m = MEDIA_FILE_RE.exec(fileName);
   if (!m) return null;
-  const ext = m[4] as MediaExt;
-  const index = m[3] ? Number(m[3]) : undefined;
+  const ext = m[3] as MediaExt;
+  const index = m[2] ? Number(m[2]) : undefined;
   // Photos are always numbered; recordings never are.
   if ((ext === "jpg") !== (index !== undefined)) return null;
-  return { questionId: m[1], slot: (m[2] as PersonSlot | undefined) ?? "main", ext, index };
+  return { questionId: m[1], ext, index };
 }
 
 export function parseMediaPathname(pathname: string): (ParsedMediaFile & { submissionId: string }) | null {

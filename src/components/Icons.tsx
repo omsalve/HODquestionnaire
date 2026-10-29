@@ -24,18 +24,6 @@ function Svg({ size = 18, children, ...rest }: IconProps) {
   );
 }
 
-/** The PDF's star, marking questions each founder answers separately. */
-export function StarMark({ size = 14, ...rest }: IconProps) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false" {...rest}>
-      <path
-        fill="currentColor"
-        d="M12 2.6l2.76 6.06 6.62.73-4.94 4.47 1.38 6.52L12 17.07l-5.82 3.31 1.38-6.52L2.62 9.39l6.62-.73L12 2.6z"
-      />
-    </svg>
-  );
-}
-
 export const ArrowLeft = (p: IconProps) => (
   <Svg {...p}>
     <path d="M19 12H5M11 6l-6 6 6 6" />

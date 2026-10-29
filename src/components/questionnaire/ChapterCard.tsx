@@ -56,8 +56,6 @@ export function ChapterCard({ section, onDone }: { section: SectionInfo; onDone:
         />
         <p className="reveal mt-5 text-[0.9375rem] text-ink-2" style={{ "--delay": "520ms" } as CSSProperties}>
           {n === 1 ? "One question" : `${countWord(n).replace(/^\w/, (c) => c.toUpperCase())} questions`}
-          {section.perPersonCount > 0 &&
-            ` · ${section.perPersonCount === 1 ? "one" : countWord(section.perPersonCount)} answered by each founder`}
         </p>
       </div>
     </div>

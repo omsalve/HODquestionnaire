@@ -13,8 +13,8 @@ import { z } from "zod";
  *     voice  → a recorder
  *     image  → photo upload (up to maxImages, default 3)
  *   Any question can also take photos by setting `maxImages`.
- * - `perPerson: true` gives the question one answer slot per founder (the ★
- *   questions in the PDF). Works for every answer type.
+ * - Each founder answers every question on their own page (see founders.ts),
+ *   so each question has exactly one answer per submission.
  * - `section` groups consecutive questions under a chapter heading.
  *
  * The array is validated with zod when this module loads, so a malformed entry
@@ -23,15 +23,6 @@ import { z } from "zod";
 
 export const QUESTION_TYPES = ["text", "voice", "image"] as const;
 export type QuestionType = (typeof QUESTION_TYPES)[number];
-
-export const PERSON_SLOTS = ["p1", "p2"] as const;
-export type PersonSlot = (typeof PERSON_SLOTS)[number];
-
-/** Default labels for the two per-person answer slots. Respondents can type real names on the first screen. */
-export const PEOPLE: Record<PersonSlot, string> = {
-  p1: "Founder one",
-  p2: "Founder two",
-};
 
 /** Time zone used for dates in the admin area. */
 export const DISPLAY_TIME_ZONE = "Asia/Kolkata";
@@ -53,7 +44,6 @@ const QuestionSchema = z
     voiceNote: z.boolean().optional(),
     /** Allow up to this many photos per answer slot. Image questions default to DEFAULT_MAX_IMAGES. */
     maxImages: z.number().int().min(1).max(MAX_IMAGES_LIMIT).optional(),
-    perPerson: z.boolean().optional(),
     section: z.string().trim().min(1).optional(),
   })
   .strict()
@@ -126,7 +116,6 @@ const RAW_QUESTIONS: z.input<typeof QuestionSchema>[] = [
     section: S.founders,
     prompt: "In one line, why does this studio exist, and what's the real reason clients choose you over others?",
     required: true,
-    perPerson: true,
     multiline: true,
   },
   {
@@ -182,7 +171,6 @@ const RAW_QUESTIONS: z.input<typeof QuestionSchema>[] = [
     section: S.business,
     prompt: "What does “affordable luxury” mean to you, and what makes your products feel luxury at that price?",
     required: true,
-    perPerson: true,
     multiline: true,
   },
   {
@@ -214,7 +202,6 @@ const RAW_QUESTIONS: z.input<typeof QuestionSchema>[] = [
     prompt:
       "Looking at your current name and identity: what's working, what feels outdated, what's non-negotiable, and are you open to a name change?",
     required: true,
-    perPerson: true,
     multiline: true,
   },
   {
@@ -232,7 +219,6 @@ const RAW_QUESTIONS: z.input<typeof QuestionSchema>[] = [
     prompt:
       "Give us three words you want associated with the studio and three you never want. If the studio were a hotel or a fashion label, which would it be?",
     required: true,
-    perPerson: true,
     multiline: true,
   },
   {
@@ -273,7 +259,6 @@ const RAW_QUESTIONS: z.input<typeof QuestionSchema>[] = [
     prompt:
       "What's your design signature, the recurring materials, palettes, forms, or styling choices that should show up in every post?",
     required: true,
-    perPerson: true,
     multiline: true,
     maxImages: 5,
     helperText: "Add photos of the materials, palettes or spaces that show it.",
@@ -335,7 +320,6 @@ const RAW_QUESTIONS: z.input<typeof QuestionSchema>[] = [
     prompt:
       "What does each of you have strong opinions on? What do you know that clients don't: material trends, cost myths, vendor realities, why timelines slip?",
     required: true,
-    perPerson: true,
     multiline: true,
   },
   {
@@ -344,7 +328,6 @@ const RAW_QUESTIONS: z.input<typeof QuestionSchema>[] = [
     section: S.linkedin,
     prompt: "How would you split territory between you? For example, one creative voice and one business voice.",
     required: true,
-    perPerson: true,
     multiline: true,
   },
   {
@@ -420,7 +403,6 @@ const RAW_QUESTIONS: z.input<typeof QuestionSchema>[] = [
     prompt:
       "What does success look like at 6 months and at 12 months? What matters most right now: higher-value projects, more volume, product sales, or reputation?",
     required: true,
-    perPerson: true,
     multiline: true,
   },
   {
@@ -457,7 +439,6 @@ const RAW_QUESTIONS: z.input<typeof QuestionSchema>[] = [
   //   section: S.goals,
   //   prompt: "Share a photo of a room that feels most like you.",
   //   required: false,
-  //   perPerson: true,
   //   maxImages: 5,
   // },
   // A text question can turn off its voice-note button with `voiceNote: false`.

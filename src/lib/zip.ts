@@ -28,9 +28,13 @@ function appendAndWait(archive: Archive, source: Readable | string, name: string
   });
 }
 
-/** Adds manifest.json, answers.md and ordered media for one submission under `folder`. */
-async function appendSubmission(archive: Archive, submissionId: string, folder = ""): Promise<void> {
+/**
+ * Adds manifest.json, answers.md and ordered media for one submission. When `nested`,
+ * it goes in a `{founder}-{submissionId}/` folder so both founders' answers sort side by side.
+ */
+async function appendSubmission(archive: Archive, submissionId: string, nested: boolean): Promise<void> {
   const result = await readManifest(submissionId);
+  let folder = nested ? `${submissionId}/` : "";
   if (result.status !== "ok") {
     await appendAndWait(
       archive,
@@ -40,6 +44,7 @@ async function appendSubmission(archive: Archive, submissionId: string, folder =
     return;
   }
   const { manifest } = result;
+  if (nested) folder = `${manifest.founder.id}-${submissionId}/`;
   await appendAndWait(archive, JSON.stringify(manifest, null, 2), `${folder}manifest.json`);
   await appendAndWait(archive, answersMarkdown(manifest), `${folder}answers.md`);
 
@@ -70,7 +75,7 @@ export function zipResponse(submissionIds: string[], fileName: string): Response
 
   void (async () => {
     try {
-      for (const id of submissionIds) await appendSubmission(archive, id, nested ? `${id}/` : "");
+      for (const id of submissionIds) await appendSubmission(archive, id, nested);
       await archive.finalize();
     } catch (error) {
       console.error("[export] zip failed", error);

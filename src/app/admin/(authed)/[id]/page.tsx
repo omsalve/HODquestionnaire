@@ -1,17 +1,16 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { PERSON_SLOTS } from "@/config/questions";
 import { DeleteSubmission } from "@/components/admin/DeleteSubmission";
 import { AudioPlayer } from "@/components/AudioPlayer";
-import { ArrowLeft, Download, StarMark } from "@/components/Icons";
+import { ArrowLeft, Download } from "@/components/Icons";
 import { buttonClass } from "@/components/ui";
 import { requireAdminPage } from "@/lib/admin-session";
 import { readManifest } from "@/lib/blob";
-import { answerSlots, formatDateTime } from "@/lib/export";
+import { formatDateTime } from "@/lib/export";
 import { formatBytes, formatDuration } from "@/lib/format";
-import type { Manifest, SlotAnswer } from "@/lib/manifest";
-import { isSubmissionId, type SlotKey } from "@/lib/paths";
+import type { AnswerParts, Manifest } from "@/lib/manifest";
+import { isSubmissionId } from "@/lib/paths";
 import { pad2 } from "@/lib/sections";
 
 export const metadata: Metadata = { title: "Submission · House of Design" };
@@ -22,7 +21,7 @@ function mediaUrl(submissionId: string, pathname: string): string {
 
 const SHADOW = "shadow-[0_1px_2px_rgb(36_32_30/0.08),0_8px_24px_-12px_rgb(36_32_30/0.25)]";
 
-function Answer({ value, submissionId, label }: { value: SlotAnswer; submissionId: string; label: string }) {
+function Answer({ value, submissionId, label }: { value: AnswerParts; submissionId: string; label: string }) {
   const voice = value.voice;
   return (
     <div className="space-y-5">
@@ -80,7 +79,6 @@ function Answer({ value, submissionId, label }: { value: SlotAnswer; submissionI
 }
 
 function QuestionList({ manifest }: { manifest: Manifest }) {
-  const people = manifest.respondent.people ?? {};
   const sectionStarts = new Map<number, { number: number; title: string }>();
   manifest.questions.forEach((q, i) => {
     const prev = i > 0 ? manifest.questions[i - 1].section : undefined;
@@ -91,8 +89,6 @@ function QuestionList({ manifest }: { manifest: Manifest }) {
     <ol className="mt-4">
       {manifest.questions.map((q, index) => {
         const answer = manifest.answers[q.id];
-        const bySlot = new Map<SlotKey, SlotAnswer>(answer ? answerSlots(answer).map(([slot, v]) => [slot, v]) : []);
-        const slots: SlotKey[] = q.perPerson ? [...PERSON_SLOTS] : ["main"];
         const heading = sectionStarts.get(index);
 
         return (
@@ -106,7 +102,6 @@ function QuestionList({ manifest }: { manifest: Manifest }) {
             <article className="mt-4 border-t border-rule py-7">
               <p className="font-serif text-[1.1875rem] leading-[1.4] text-ink">
                 <span className="mr-2 font-sans text-[0.8125rem] font-bold tabular-nums text-clay">{index + 1}.</span>
-                {q.perPerson && <StarMark size={11} className="mr-1.5 inline align-[0.05em] text-clay" />}
                 {q.prompt}
               </p>
               <p className="mt-1 text-xs uppercase tracking-[0.12em] text-ink-3">
@@ -119,27 +114,16 @@ function QuestionList({ manifest }: { manifest: Manifest }) {
                   .filter(Boolean)
                   .join(" · ")}
               </p>
-              <div className="mt-5 space-y-6">
-                {slots.map((slot) => {
-                  const value = bySlot.get(slot);
-                  const person = slot === "main" ? undefined : (people[slot] ?? slot);
-                  return (
-                    <div key={slot}>
-                      {person && (
-                        <p className="mb-2 text-[0.75rem] font-bold uppercase tracking-[0.14em] text-clay">{person}</p>
-                      )}
-                      {value ? (
-                        <Answer
-                          value={value}
-                          submissionId={manifest.submissionId}
-                          label={`${person ? `${person}'s answer` : "Answer"} to question ${index + 1}`}
-                        />
-                      ) : (
-                        <p className="text-[0.9375rem] italic text-ink-3">No answer</p>
-                      )}
-                    </div>
-                  );
-                })}
+              <div className="mt-5">
+                {answer ? (
+                  <Answer
+                    value={answer}
+                    submissionId={manifest.submissionId}
+                    label={`${manifest.founder.name}'s answer to question ${index + 1}`}
+                  />
+                ) : (
+                  <p className="text-[0.9375rem] italic text-ink-3">No answer</p>
+                )}
               </div>
             </article>
           </li>
@@ -186,7 +170,6 @@ async function Detail({ params }: { params: PageProps<"/admin/[id]">["params"] }
   }
 
   const m = result.manifest;
-  const people = m.respondent.people ?? {};
   const answered = m.questions.filter((q) => m.answers[q.id]).length;
 
   return (
@@ -194,25 +177,19 @@ async function Detail({ params }: { params: PageProps<"/admin/[id]">["params"] }
       {back}
       <header className="mt-8">
         <h1 className="font-serif text-[clamp(2rem,1.6rem+2vw,3rem)] leading-[1.08] tracking-[-0.018em]">
-          {m.respondent.name || "Unnamed submission"}
+          {m.founder.name}&rsquo;s answers
         </h1>
         <dl className="mt-5 grid gap-x-10 gap-y-3 text-[0.9375rem] sm:grid-cols-[auto_1fr]">
           <dt className="text-ink-3">Submitted</dt>
           <dd className="tabular-nums">{formatDateTime(m.submittedAt)}</dd>
-          {m.respondent.email && (
+          {m.email && (
             <>
               <dt className="text-ink-3">Email</dt>
               <dd>
-                <a href={`mailto:${m.respondent.email}`} className="underline decoration-rule hover:decoration-clay">
-                  {m.respondent.email}
+                <a href={`mailto:${m.email}`} className="underline decoration-rule hover:decoration-clay">
+                  {m.email}
                 </a>
               </dd>
-            </>
-          )}
-          {m.questions.some((q) => q.perPerson) && (
-            <>
-              <dt className="text-ink-3">Founders</dt>
-              <dd>{PERSON_SLOTS.map((s) => people[s] ?? s).join(" · ")}</dd>
             </>
           )}
           <dt className="text-ink-3">Answered</dt>

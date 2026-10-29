@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import type { Metadata } from "next";
+import { FOUNDER_IDS, FOUNDER_NAMES } from "@/config/founders";
 import { DeleteSubmission } from "@/components/admin/DeleteSubmission";
 import { ArrowRight } from "@/components/Icons";
 import { requireAdminPage } from "@/lib/admin-session";
@@ -45,12 +46,36 @@ async function SubmissionList() {
   }));
   const submitted = rows.filter((r) => r.result.status === "ok");
   const unfinished = rows.filter((r) => r.result.status !== "ok");
+  // Rows are newest first, so the first match is each founder's latest submission.
+  const latest = FOUNDER_IDS.map((founder) => ({
+    founder,
+    manifest: submitted
+      .map((r) => (r.result.status === "ok" ? r.result.manifest : null))
+      .find((m) => m?.founder.id === founder),
+  }));
 
   return (
     <>
-      <p className="mt-3 text-ink-2">
+      <dl className="mt-8 grid gap-px border border-rule bg-rule sm:grid-cols-2">
+        {latest.map(({ founder, manifest }) => (
+          <div key={founder} className="bg-paper px-5 py-4">
+            <dt className="text-[0.75rem] font-bold uppercase tracking-[0.14em] text-clay">{FOUNDER_NAMES[founder]}</dt>
+            <dd className="mt-1 text-[0.9375rem] tabular-nums text-ink-2">
+              {manifest ? (
+                <Link href={`/admin/${manifest.submissionId}`} className="underline decoration-rule hover:decoration-clay">
+                  Sent {formatDateTime(manifest.submittedAt)}
+                </Link>
+              ) : (
+                "Not sent yet"
+              )}
+            </dd>
+          </div>
+        ))}
+      </dl>
+
+      <p className="mt-10 text-ink-2">
         {submitted.length === 0
-          ? "Nothing yet. When the founders send their answers, they’ll appear here."
+          ? "Nothing yet. When each founder sends their answers, they’ll appear here."
           : `${submitted.length} ${submitted.length === 1 ? "submission" : "submissions"}, newest first.`}
       </p>
 
@@ -71,12 +96,8 @@ async function SubmissionList() {
                 >
                   <span className="text-sm tabular-nums text-ink-2">{formatDateTime(m.submittedAt)}</span>
                   <span className="min-w-0">
-                    <span className="block truncate font-serif text-[1.25rem] text-ink">
-                      {m.respondent.name || "Unnamed"}
-                    </span>
-                    {m.respondent.email && (
-                      <span className="block truncate text-sm text-ink-2">{m.respondent.email}</span>
-                    )}
+                    <span className="block truncate font-serif text-[1.25rem] text-ink">{m.founder.name}</span>
+                    {m.email && <span className="block truncate text-sm text-ink-2">{m.email}</span>}
                   </span>
                   <span className="flex items-center gap-4 text-sm tabular-nums text-ink-2">
                     {answered} / {m.questions.length} answered

@@ -1,28 +1,26 @@
 "use client";
 
 import { useEffect, useRef, type CSSProperties } from "react";
-import { answerModes, DEFAULT_MAX_DURATION_SEC, type PersonSlot, type Question } from "@/config/questions";
+import { answerModes, DEFAULT_MAX_DURATION_SEC, type Question } from "@/config/questions";
 import { ImageAnswer } from "@/components/answers/ImageAnswer";
 import { TextAnswer } from "@/components/answers/TextAnswer";
 import { VoiceAnswer } from "@/components/answers/VoiceAnswer";
-import { ArrowLeft, ArrowRight, StarMark } from "@/components/Icons";
+import { ArrowLeft, ArrowRight } from "@/components/Icons";
 import { RevealText } from "@/components/questionnaire/RevealText";
 import { Button } from "@/components/ui";
-import type { DraftSlot } from "@/lib/draft";
-import type { SlotKey } from "@/lib/paths";
+import type { DraftAnswer } from "@/lib/draft";
 
 export function QuestionScreen({
   question,
   number,
   submissionId,
-  people,
-  answers,
+  answer,
   previews,
   autoFocus,
   nextLabel,
   error,
   canGoBack,
-  onSlotChange,
+  onChange,
   onPreview,
   onBusy,
   onNext,
@@ -31,30 +29,73 @@ export function QuestionScreen({
   question: Question;
   number: number;
   submissionId: string;
-  people: Record<PersonSlot, string>;
-  answers: Partial<Record<SlotKey, DraftSlot>>;
+  answer: DraftAnswer;
   /** Local object URLs keyed by blob pathname. */
   previews: Record<string, string>;
   autoFocus: boolean;
   nextLabel: string;
   error: string | null;
   canGoBack: boolean;
-  onSlotChange: (slot: SlotKey, update: (prev: DraftSlot) => DraftSlot) => void;
+  onChange: (update: (prev: DraftAnswer) => DraftAnswer) => void;
   onPreview: (pathname: string, url: string | undefined) => void;
   onBusy: (key: string, busy: boolean) => void;
   onNext: () => void;
   onBack: () => void;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const slots: SlotKey[] = question.perPerson ? ["p1", "p2"] : ["main"];
   const modes = answerModes(question);
   const wordCount = question.prompt.split(/\s+/).length;
   // The answer area arrives as the last words of the prompt settle.
   const answerDelay = Math.min(wordCount, 36) * 26 + 260;
+  const who = "this question";
 
   useEffect(() => {
     if (!autoFocus || !modes.text) headingRef.current?.focus({ preventScroll: true });
   }, [autoFocus, modes.text]);
+
+  const voice = modes.voice && (
+    <VoiceAnswer
+      submissionId={submissionId}
+      questionId={question.id}
+      label={who}
+      variant={question.type === "voice" ? "primary" : "note"}
+      maxDurationSec={question.maxDurationSec ?? DEFAULT_MAX_DURATION_SEC}
+      value={answer.voice}
+      previewUrl={answer.voice ? previews[answer.voice.pathname] : undefined}
+      onSaved={(v, url) => {
+        onPreview(v.pathname, url);
+        onChange((prev) => ({ ...prev, voice: v }));
+      }}
+      onRemove={() => onChange((prev) => ({ ...prev, voice: undefined }))}
+      onBusyChange={(busy) => onBusy("voice", busy)}
+    />
+  );
+  const photos = modes.images > 0 && (
+    <ImageAnswer
+      submissionId={submissionId}
+      questionId={question.id}
+      label={who}
+      max={modes.images}
+      variant={question.type === "image" ? "primary" : "note"}
+      images={answer.images ?? []}
+      previews={previews}
+      onAdd={(img, url) => {
+        onPreview(img.pathname, url);
+        onChange((prev) => ({
+          ...prev,
+          images: [...(prev.images ?? []).filter((i) => i.pathname !== img.pathname), img],
+        }));
+      }}
+      onRemove={(pathname) => {
+        onPreview(pathname, undefined);
+        onChange((prev) => ({
+          ...prev,
+          images: (prev.images ?? []).filter((i) => i.pathname !== pathname),
+        }));
+      }}
+      onBusyChange={(busy) => onBusy("images", busy)}
+    />
+  );
 
   return (
     <article className="mx-auto w-full max-w-[42rem] px-6 pb-24 pt-[clamp(2.5rem,9vh,6rem)] sm:px-8">
@@ -67,113 +108,41 @@ export function QuestionScreen({
         <RevealText text={question.prompt} delayMs={80} />
       </h1>
 
-      {(question.perPerson || question.helperText) && (
-        <div className="reveal mt-5 space-y-2" style={{ "--delay": `${answerDelay - 120}ms` } as CSSProperties}>
-          {question.perPerson && (
-            <p className="flex items-center gap-2 text-[0.9375rem] italic text-clay-deep">
-              <StarMark size={13} className="shrink-0 text-clay" />
-              Each founder answers separately{question.required ? "." : ", if you'd like."}
-            </p>
-          )}
-          {question.helperText && <p className="max-w-prose text-[0.9375rem] text-ink-2">{question.helperText}</p>}
-        </div>
+      {question.helperText && (
+        <p
+          className="reveal mt-5 max-w-prose text-[0.9375rem] text-ink-2"
+          style={{ "--delay": `${answerDelay - 120}ms` } as CSSProperties}
+        >
+          {question.helperText}
+        </p>
       )}
 
-      <div
-        className={`reveal mt-10 ${question.perPerson ? "space-y-12" : ""}`}
-        style={{ "--delay": `${answerDelay}ms` } as CSSProperties}
-      >
-        {slots.map((slot, index) => {
-          const person = slot === "main" ? undefined : people[slot];
-          const label = person ? `${person}: ${question.prompt}` : question.prompt;
-          const who = person ? `${person}'s answer` : "this question";
-          const value = answers[slot] ?? {};
-          const voice = modes.voice && (
-            <VoiceAnswer
-              submissionId={submissionId}
-              questionId={question.id}
-              slot={slot}
-              label={who}
-              variant={question.type === "voice" ? "primary" : "note"}
-              maxDurationSec={question.maxDurationSec ?? DEFAULT_MAX_DURATION_SEC}
-              value={value.voice}
-              previewUrl={value.voice ? previews[value.voice.pathname] : undefined}
-              onSaved={(v, url) => {
-                onPreview(v.pathname, url);
-                onSlotChange(slot, (prev) => ({ ...prev, voice: v }));
-              }}
-              onRemove={() => onSlotChange(slot, (prev) => ({ ...prev, voice: undefined }))}
-              onBusyChange={(busy) => onBusy(`${slot}:voice`, busy)}
+      <div className="reveal mt-10" style={{ "--delay": `${answerDelay}ms` } as CSSProperties}>
+        {modes.text ? (
+          <>
+            <TextAnswer
+              id={`answer-${question.id}`}
+              label={question.prompt}
+              multiline={question.multiline ?? true}
+              value={answer.text ?? ""}
+              autoFocus={autoFocus}
+              placeholder={modes.voice ? "Write your answer, or record a voice note below…" : undefined}
+              onChange={(text) => onChange((prev) => ({ ...prev, text }))}
+              onSubmitShortcut={onNext}
             />
-          );
-          const photos = modes.images > 0 && (
-            <ImageAnswer
-              submissionId={submissionId}
-              questionId={question.id}
-              slot={slot}
-              label={who}
-              max={modes.images}
-              variant={question.type === "image" ? "primary" : "note"}
-              images={value.images ?? []}
-              previews={previews}
-              onAdd={(img, url) => {
-                onPreview(img.pathname, url);
-                onSlotChange(slot, (prev) => ({
-                  ...prev,
-                  images: [...(prev.images ?? []).filter((i) => i.pathname !== img.pathname), img],
-                }));
-              }}
-              onRemove={(pathname) => {
-                onPreview(pathname, undefined);
-                onSlotChange(slot, (prev) => ({
-                  ...prev,
-                  images: (prev.images ?? []).filter((i) => i.pathname !== pathname),
-                }));
-              }}
-              onBusyChange={(busy) => onBusy(`${slot}:images`, busy)}
-            />
-          );
-          return (
-            <section key={slot} aria-label={person}>
-              {person && (
-                <h2 className="mb-3 flex items-baseline gap-3 text-[0.8125rem] font-bold uppercase tracking-[0.14em] text-clay">
-                  {person}
-                </h2>
-              )}
-              {modes.text ? (
-                <>
-                  <TextAnswer
-                    id={`answer-${question.id}-${slot}`}
-                    label={label}
-                    multiline={question.multiline ?? true}
-                    value={value.text ?? ""}
-                    autoFocus={autoFocus && index === 0}
-                    placeholder={
-                      person
-                        ? `${person}'s answer…`
-                        : modes.voice
-                          ? "Write your answer, or record a voice note below…"
-                          : undefined
-                    }
-                    onChange={(text) => onSlotChange(slot, (prev) => ({ ...prev, text }))}
-                    onSubmitShortcut={onNext}
-                  />
-                  {(voice || photos) && (
-                    <div className="mt-5 flex flex-wrap items-start gap-x-3 gap-y-6">
-                      {voice}
-                      {photos}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="flex flex-wrap items-start gap-x-3 gap-y-8">
-                  {voice}
-                  {photos}
-                </div>
-              )}
-            </section>
-          );
-        })}
+            {(voice || photos) && (
+              <div className="mt-5 flex flex-wrap items-start gap-x-3 gap-y-6">
+                {voice}
+                {photos}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="flex flex-wrap items-start gap-x-3 gap-y-8">
+            {voice}
+            {photos}
+          </div>
+        )}
 
         <nav className="mt-14 flex items-center justify-between gap-4" aria-label="Question navigation">
           <Button variant="quiet" onClick={onBack} disabled={!canGoBack}>

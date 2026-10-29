@@ -1,54 +1,64 @@
-import type { PersonSlot } from "@/config/questions";
+import type { FounderId } from "@/config/founders";
 import type { ImageFile, VoiceFile } from "@/lib/manifest";
-import { createSubmissionId, isSubmissionId, type SlotKey } from "@/lib/paths";
+import { createSubmissionId, isSubmissionId } from "@/lib/paths";
 
 /**
- * The in-progress questionnaire, mirrored to localStorage so a refresh (or a
- * phone locking mid-answer) never loses work. Recordings and photos are stored
- * as references to blobs that were already uploaded, plus a tiny thumbnail per
- * photo for the review screen.
+ * One founder's in-progress questionnaire, mirrored to localStorage so a
+ * refresh (or a phone locking mid-answer) never loses work. Each founder has
+ * their own draft, so the two pages never mix answers even on a shared device.
+ * Recordings and photos are stored as references to blobs that were already
+ * uploaded, plus a tiny thumbnail per photo for the review screen.
  */
 
 export type DraftImage = ImageFile & { thumb?: string };
 
-/** One answer slot: any mix of writing, one recording and photos. */
-export interface DraftSlot {
+/** One answer: any mix of writing, one recording and photos. */
+export interface DraftAnswer {
   text?: string;
   voice?: VoiceFile;
   images?: DraftImage[];
 }
 
-export type DraftAnswers = Record<string, Partial<Record<SlotKey, DraftSlot>>>;
+export type DraftAnswers = Record<string, DraftAnswer>;
 
 export interface Draft {
-  version: 2;
+  version: 3;
+  founder: FounderId;
   submissionId: string;
   step: number;
-  respondent: { name: string; email: string; people: Record<PersonSlot, string> };
+  email: string;
   /** Honeypot mirror. */
   website: string;
   answers: DraftAnswers;
 }
 
-const KEY = "hod-questionnaire:draft:v2";
+const keyFor = (founder: FounderId) => `hod-questionnaire:draft:v3:${founder}`;
 
-export function newDraft(): Draft {
+export function newDraft(founder: FounderId): Draft {
   return {
-    version: 2,
+    version: 3,
+    founder,
     submissionId: createSubmissionId(),
     step: 0,
-    respondent: { name: "", email: "", people: { p1: "", p2: "" } },
+    email: "",
     website: "",
     answers: {},
   };
 }
 
-export function loadDraft(): Draft | null {
+export function loadDraft(founder: FounderId): Draft | null {
   try {
-    const raw = window.localStorage.getItem(KEY);
+    const raw = window.localStorage.getItem(keyFor(founder));
     if (!raw) return null;
     const draft = JSON.parse(raw) as Draft;
-    if (draft?.version !== 2 || !isSubmissionId(draft.submissionId) || typeof draft.answers !== "object") return null;
+    if (
+      draft?.version !== 3 ||
+      draft.founder !== founder ||
+      !isSubmissionId(draft.submissionId) ||
+      typeof draft.answers !== "object"
+    ) {
+      return null;
+    }
     return draft;
   } catch {
     return null;
@@ -57,7 +67,7 @@ export function loadDraft(): Draft | null {
 
 export function saveDraft(draft: Draft): boolean {
   try {
-    window.localStorage.setItem(KEY, JSON.stringify(draft));
+    window.localStorage.setItem(keyFor(draft.founder), JSON.stringify(draft));
     return true;
   } catch {
     // Quota exceeded: drop thumbnails, keep the answers.
@@ -65,18 +75,13 @@ export function saveDraft(draft: Draft): boolean {
       const lean: Draft = {
         ...draft,
         answers: Object.fromEntries(
-          Object.entries(draft.answers).map(([id, slots]) => [
+          Object.entries(draft.answers).map(([id, v]) => [
             id,
-            Object.fromEntries(
-              Object.entries(slots).map(([slot, v]) => [
-                slot,
-                v?.images ? { ...v, images: v.images.map((img) => ({ ...img, thumb: undefined })) } : v,
-              ]),
-            ),
+            v.images ? { ...v, images: v.images.map((img) => ({ ...img, thumb: undefined })) } : v,
           ]),
         ),
       };
-      window.localStorage.setItem(KEY, JSON.stringify(lean));
+      window.localStorage.setItem(keyFor(draft.founder), JSON.stringify(lean));
       return true;
     } catch {
       return false;
@@ -84,15 +89,15 @@ export function saveDraft(draft: Draft): boolean {
   }
 }
 
-export function clearDraft(): void {
+export function clearDraft(founder: FounderId): void {
   try {
-    window.localStorage.removeItem(KEY);
+    window.localStorage.removeItem(keyFor(founder));
   } catch {
     /* storage unavailable */
   }
 }
 
-export function isAnswered(slot: DraftSlot | undefined): boolean {
-  if (!slot) return false;
-  return !!slot.text?.trim() || !!slot.voice || (slot.images?.length ?? 0) > 0;
+export function isAnswered(answer: DraftAnswer | undefined): boolean {
+  if (!answer) return false;
+  return !!answer.text?.trim() || !!answer.voice || (answer.images?.length ?? 0) > 0;
 }

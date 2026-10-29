@@ -38,11 +38,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           THESIS: The discovery questionnaire PDF the founders already hold, made alive — one question per page,
           written on the document's own dotted lines. Refuses the SaaS form-builder (cards, pills, gradients).
           OWN-WORLD: White paper, near-black ink, a single clay accent (#8f553f). Source Serif prompts, Lato
-          answers, numbered chapters, a drawn ★ for per-founder questions, hairline rules, square controls.
-          STORY: The founders recognise their brief, answer at their own pace (autosaved), each in their own voice
-          where starred, review everything on one page and send it.
+          answers, numbered chapters, hairline rules, square controls.
+          STORY: Each founder picks their name on the landing page, answers on their own page at their own pace
+          (autosaved), reviews everything on one page and sends it.
           FIRST VIEWPORT: Tracked clay wordmark settles in, "Discovery Questionnaire" focuses up at display size,
-          a clay rule draws under it; intro copy, names and the Begin control sit below on the left column.
+          a clay rule draws under it; intro copy and the two founder names sit below on the left column.
           FORM: Living document. Signature moment: chapter title cards that wipe away between sections.
           FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
         */}

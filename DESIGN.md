@@ -24,7 +24,7 @@ The discovery questionnaire PDF, made alive. Minimal, document-like, with one ci
 
 - **Answer lines:** textareas with no box, written on dotted rules (`.answer-lines`, 2rem line height, background-attachment local). A clay hairline draws under the field on focus.
 - **Buttons:** square corners (2px), 48px min height. Primary is ink and turns clay-deep on hover; outline uses an ink/20 border; quiet is text only.
-- **★:** a drawn SVG star (`StarMark`) marks per-founder questions, as in the PDF.
+- **Founder pages:** the landing page lists the two founders as large serif rows on hairline rules. Each founder's intro, review and thank-you screens carry their name in the clay label style.
 - **Progress:** a 1px rule with a clay fill under the sticky header.
 - **Recorder:** a round clay mic button (the only round control), a 28-bar clay level meter, and a serif timer.
 - **Voice note / photos:** under each text box, an outline "Record a voice note" (clay mic) and "Add photos" button; once used they expand into a labelled block (player, or a 4:5 thumbnail grid with round remove buttons and a dashed "Add more" tile). Photos get a soft two-layer shadow; audio uses a custom player with a clay scrub line.

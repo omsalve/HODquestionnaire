@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useRef, type CSSProperties } from "react";
-import type { PersonSlot, Question } from "@/config/questions";
+import type { Question } from "@/config/questions";
 import { AudioPlayer } from "@/components/AudioPlayer";
-import { Check, Mic, StarMark } from "@/components/Icons";
+import { Check, Mic } from "@/components/Icons";
 import { Button } from "@/components/ui";
-import { isAnswered, type DraftAnswers, type DraftSlot } from "@/lib/draft";
+import { isAnswered, type DraftAnswer, type DraftAnswers } from "@/lib/draft";
 import { formatDuration } from "@/lib/format";
-import type { SlotKey } from "@/lib/paths";
 import { pad2, type SectionInfo } from "@/lib/sections";
 
 function AnswerPreview({
@@ -15,7 +14,7 @@ function AnswerPreview({
   previews,
   label,
 }: {
-  value: DraftSlot | undefined;
+  value: DraftAnswer | undefined;
   previews: Record<string, string>;
   label: string;
 }) {
@@ -71,7 +70,7 @@ export function ReviewScreen({
   sections,
   answers,
   previews,
-  people,
+  founderName,
   missing,
   submitting,
   error,
@@ -82,7 +81,7 @@ export function ReviewScreen({
   sections: SectionInfo[];
   answers: DraftAnswers;
   previews: Record<string, string>;
-  people: Record<PersonSlot, string>;
+  founderName: string;
   missing: Set<string>;
   submitting: boolean;
   error: string | null;
@@ -93,10 +92,7 @@ export function ReviewScreen({
   useEffect(() => headingRef.current?.focus({ preventScroll: true }), []);
 
   const indexById = new Map(questions.map((q, i) => [q.id, i]));
-  const answeredCount = questions.filter((q) => {
-    const slots: SlotKey[] = q.perPerson ? ["p1", "p2"] : ["main"];
-    return slots.some((s) => isAnswered(answers[q.id]?.[s]));
-  }).length;
+  const answeredCount = questions.filter((q) => isAnswered(answers[q.id])).length;
   const firstMissing = questions.findIndex((q) => missing.has(q.id));
 
   return (
@@ -106,7 +102,7 @@ export function ReviewScreen({
         tabIndex={-1}
         className="reveal-focus font-serif text-[clamp(2.25rem,1.6rem+3vw,3.5rem)] leading-[1.05] tracking-[-0.02em] outline-none"
       >
-        Review your answers
+        Review your answers, {founderName}
       </h1>
       <p
         className="reveal mt-4 max-w-[52ch] text-[1.0625rem] text-ink-2"
@@ -136,7 +132,6 @@ export function ReviewScreen({
               {section.questionIds.map((id) => {
                 const index = indexById.get(id)!;
                 const q = questions[index];
-                const slots: SlotKey[] = q.perPerson ? ["p1", "p2"] : ["main"];
                 const isMissing = missing.has(q.id);
                 return (
                   <li key={id} className="border-t border-rule py-7">
@@ -145,7 +140,6 @@ export function ReviewScreen({
                         <span className="mr-2 font-sans text-[0.8125rem] font-bold tabular-nums text-clay">
                           {index + 1}.
                         </span>
-                        {q.perPerson && <StarMark size={11} className="mr-1.5 inline align-[0.05em] text-clay" />}
                         {q.prompt}
                       </p>
                       <Button
@@ -158,27 +152,13 @@ export function ReviewScreen({
                       </Button>
                     </div>
                     <div className="mt-4 space-y-6">
-                      {slots.map((slot) => {
-                        const person = slot === "main" ? undefined : people[slot];
-                        return (
-                          <div key={slot}>
-                            {person && (
-                              <p className="mb-2 text-[0.75rem] font-bold uppercase tracking-[0.14em] text-clay">
-                                {person}
-                              </p>
-                            )}
-                            <AnswerPreview
-                              value={answers[q.id]?.[slot]}
-                              previews={previews}
-                              label={`${person ? `${person}'s answer` : "Answer"} to question ${index + 1}`}
-                            />
-                          </div>
-                        );
-                      })}
+                      <AnswerPreview
+                        value={answers[q.id]}
+                        previews={previews}
+                        label={`Answer to question ${index + 1}`}
+                      />
                       {isMissing && (
-                        <p className="text-[0.9375rem] font-bold text-danger">
-                          {q.perPerson ? "Both founders need to answer this one." : "This one needs an answer."}
-                        </p>
+                        <p className="text-[0.9375rem] font-bold text-danger">This one needs an answer.</p>
                       )}
                     </div>
                   </li>

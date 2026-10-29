@@ -1,29 +1,22 @@
 import { headers } from "next/headers";
 import { BlobPreconditionFailedError } from "@vercel/blob";
-import { answerModes, PEOPLE, PERSON_SLOTS, QUESTIONS, getQuestion, type Question } from "@/config/questions";
+import { FOUNDER_NAMES } from "@/config/founders";
+import { answerModes, QUESTIONS, getQuestion, type Question } from "@/config/questions";
 import { deletePathnames, headOrNull, listSubmissionBlobs, manifestExists, writeManifest } from "@/lib/blob";
 import {
   SubmitBodySchema,
-  type ClientSlot,
+  type AnswerParts,
+  type ClientAnswer,
   type ImageFile,
   type Manifest,
   type ManifestAnswer,
-  type PersonAnswer,
-  type SlotAnswer,
   type VoiceFile,
 } from "@/lib/manifest";
-import {
-  MEDIA_RULES,
-  extForMime,
-  manifestPathname,
-  mediaPathname,
-  parseMediaPathname,
-  type SlotKey,
-} from "@/lib/paths";
-import { assertFreshSubmissionId, MIN_FILL_TIME_MS, RuleError, slotsFor } from "@/lib/submission-rules";
+import { MEDIA_RULES, extForMime, manifestPathname, mediaPathname, parseMediaPathname } from "@/lib/paths";
+import { assertFreshSubmissionId, MIN_FILL_TIME_MS, RuleError } from "@/lib/submission-rules";
 
 /**
- * Finalises a submission: validates every answer against the questionnaire,
+ * Finalises one founder's submission: validates every answer against the questionnaire,
  * confirms each referenced media blob exists in the store, writes
  * manifest.json once, and removes media the respondent replaced or removed.
  */
@@ -54,40 +47,17 @@ export async function POST(request: Request): Promise<Response> {
       if (!getQuestion(id)) throw new RuleError("The questionnaire changed while you were answering. Please reload.");
     }
 
-    const people = { ...PEOPLE, ...stripEmpty(body.respondent.people ?? {}) };
     const answers: Record<string, ManifestAnswer> = {};
     const missing: string[] = [];
 
     for (const question of QUESTIONS) {
-      const slots = body.answers[question.id] ?? {};
-      const resolved: Partial<Record<SlotKey, SlotAnswer>> = {};
-
-      for (const slot of slotsFor(question)) {
-        const input = slots[slot];
-        if (!input) continue;
-        const answer = await verifySlot(body.submissionId, question, slot, input);
-        if (answer) resolved[slot] = answer;
+      const input = body.answers[question.id];
+      const answer = input ? await verifyAnswer(body.submissionId, question, input) : null;
+      if (!answer) {
+        if (question.required) missing.push(question.id);
+        continue;
       }
-
-      const answeredSlots = Object.keys(resolved) as SlotKey[];
-      if (question.required && answeredSlots.length < slotsFor(question).length) missing.push(question.id);
-      if (answeredSlots.length === 0) continue;
-
-      if (question.perPerson) {
-        const byPerson: Partial<Record<(typeof PERSON_SLOTS)[number], PersonAnswer>> = {};
-        for (const slot of PERSON_SLOTS) {
-          const value = resolved[slot];
-          if (value) byPerson[slot] = { person: people[slot], ...value };
-        }
-        answers[question.id] = {
-          type: question.type,
-          questionPrompt: question.prompt,
-          perPerson: true,
-          people: byPerson,
-        };
-      } else {
-        answers[question.id] = { type: question.type, questionPrompt: question.prompt, ...resolved.main! };
-      }
+      answers[question.id] = { type: question.type, questionPrompt: question.prompt, ...answer };
     }
 
     if (missing.length > 0) {
@@ -95,21 +65,17 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const manifest: Manifest = {
-      version: 1,
+      version: 2,
       submissionId: body.submissionId,
       submittedAt: new Date().toISOString(),
-      respondent: {
-        name: body.respondent.name,
-        email: body.respondent.email,
-        people,
-      },
+      founder: { id: body.founder, name: FOUNDER_NAMES[body.founder] },
+      email: body.email,
       userAgent: ((await headers()).get("user-agent") ?? "").slice(0, 500),
       questions: QUESTIONS.map((q) => ({
         id: q.id,
         type: q.type,
         prompt: q.prompt,
         section: q.section,
-        perPerson: q.perPerson ?? false,
         required: q.required,
         accepts: answerModes(q),
       })),
@@ -130,10 +96,6 @@ export async function POST(request: Request): Promise<Response> {
   }
 }
 
-function stripEmpty(record: Partial<Record<string, string | undefined>>): Record<string, string> {
-  return Object.fromEntries(Object.entries(record).filter((e): e is [string, string] => !!e[1]));
-}
-
 async function assertStored(pathname: string, mimeType: string, maxBytes: number): Promise<number> {
   const blob = await headOrNull(pathname);
   if (!blob) throw new RuleError("A recording or photo didn't finish uploading. Please add it again.");
@@ -142,15 +104,14 @@ async function assertStored(pathname: string, mimeType: string, maxBytes: number
   return blob.size;
 }
 
-/** Validates one answer slot against what the question accepts. Returns null when the slot is empty. */
-async function verifySlot(
+/** Validates one answer against what the question accepts. Returns null when the answer is empty. */
+async function verifyAnswer(
   submissionId: string,
   question: Question,
-  slot: SlotKey,
-  input: ClientSlot,
-): Promise<SlotAnswer | null> {
+  input: ClientAnswer,
+): Promise<AnswerParts | null> {
   const modes = answerModes(question);
-  const out: SlotAnswer = {};
+  const out: AnswerParts = {};
 
   const text = input.text?.trim();
   if (text) {
@@ -161,7 +122,7 @@ async function verifySlot(
   if (input.voice) {
     if (!modes.voice) throw new RuleError(`“${question.prompt}” doesn't take a recording.`);
     const v = input.voice;
-    const expected = mediaPathname(submissionId, question.id, slot, {
+    const expected = mediaPathname(submissionId, question.id, {
       kind: "voice",
       ext: extForMime(v.mimeType) as "webm" | "m4a",
     });
@@ -180,7 +141,6 @@ async function verifySlot(
           p &&
           p.submissionId === submissionId &&
           p.questionId === question.id &&
-          p.slot === slot &&
           p.ext === "jpg" &&
           (p.index ?? 0) <= modes.images &&
           !seen.has(img.pathname);
@@ -198,11 +158,8 @@ async function verifySlot(
 async function removeOrphans(manifest: Manifest): Promise<void> {
   const keep = new Set<string>([manifestPathname(manifest.submissionId)]);
   for (const answer of Object.values(manifest.answers)) {
-    const slots: SlotAnswer[] = "perPerson" in answer ? Object.values(answer.people) : [answer];
-    for (const s of slots) {
-      if (s.voice) keep.add(s.voice.pathname);
-      for (const img of s.images ?? []) keep.add(img.pathname);
-    }
+    if (answer.voice) keep.add(answer.voice.pathname);
+    for (const img of answer.images ?? []) keep.add(img.pathname);
   }
   const blobs = await listSubmissionBlobs(manifest.submissionId);
   const orphans = blobs.map((b) => b.pathname).filter((p) => !keep.has(p));
